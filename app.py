@@ -171,17 +171,17 @@ if page == "🔮 Make Prediction":
         if prediction == 1:
             st.markdown(f"""
                 <div class="prediction-box positive">
-                    <h2 style="color: #cc0000;">⚠️ HIGH RISK - Diabetes Detected</h2>
-                    <p style="font-size: 20px;">Confidence: {probability[1]*100:.1f}%</p>
-                    <p>The patient shows indicators consistent with diabetes. Medical consultation recommended.</p>
+                    <h2 style="color: #990000; font-weight: bold; font-size: 28px;">⚠️ HIGH RISK - Diabetes Detected</h2>
+                    <p style="font-size: 22px; color: #000000; font-weight: bold;">Confidence: {probability[1]*100:.1f}%</p>
+                    <p style="font-size: 16px; color: #333333;">The patient shows indicators consistent with diabetes. Medical consultation recommended.</p>
                 </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
                 <div class="prediction-box negative">
-                    <h2 style="color: #00aa00;">✅ LOW RISK - No Diabetes Detected</h2>
-                    <p style="font-size: 20px;">Confidence: {probability[0]*100:.1f}%</p>
-                    <p>The patient shows indicators consistent with no diabetes. Continue healthy lifestyle.</p>
+                    <h2 style="color: #006600; font-weight: bold; font-size: 28px;">✅ LOW RISK - No Diabetes Detected</h2>
+                    <p style="font-size: 22px; color: #000000; font-weight: bold;">Confidence: {probability[0]*100:.1f}%</p>
+                    <p style="font-size: 16px; color: #333333;">The patient shows indicators consistent with no diabetes. Continue healthy lifestyle.</p>
                 </div>
             """, unsafe_allow_html=True)
         
