@@ -4,8 +4,10 @@ import numpy as np
 import joblib
 import altair as alt
 import plotly.graph_objects as go
+import plotly.express as px
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
+from scipy import stats
 
 st.set_page_config(
     page_title="Diabetes Risk Prediction",
@@ -318,6 +320,240 @@ with insight_cols[1].container(border=True):
     ).properties(height=350)
     
     st.altair_chart(chart, use_container_width=True)
+
+""
+""
+
+# Feature Separation Analysis (from statistics.py)
+"""
+## :material/analytics: Feature Distribution Overlap
+Compare the distribution overlap between diabetic and non-diabetic patients
+"""
+
+# Prepare data for analysis
+positive_data = dataset[dataset['class'] == 'tested_positive']
+negative_data = dataset[dataset['class'] == 'tested_negative']
+
+# Calculate separation scores (same as statistics.py)
+features = ['preg', 'plas', 'pres', 'skin', 'insu', 'mass', 'pedi', 'age']
+variance_analysis = []
+
+for feature in features:
+    pos_mean = positive_data[feature].mean()
+    neg_mean = negative_data[feature].mean()
+    diff = abs(pos_mean - neg_mean)
+    pos_std = positive_data[feature].std()
+    neg_std = negative_data[feature].std()
+    
+    variance_analysis.append({
+        'feature': feature,
+        'mean_diff': round(diff, 2),
+        'positive_mean': round(pos_mean, 2),
+        'negative_mean': round(neg_mean, 2),
+        'positive_std': round(pos_std, 2),
+        'negative_std': round(neg_std, 2),
+        'separation_score': round(diff / ((pos_std + neg_std) / 2), 3)
+    })
+
+df_variance = pd.DataFrame(variance_analysis).sort_values('separation_score', ascending=False)
+
+feature_names_full = {
+    'plas': 'Glucose', 
+    'mass': 'BMI', 
+    'age': 'Age',
+    'preg': 'Pregnancies', 
+    'pedi': 'Pedigree',
+    'pres': 'Blood Pressure',
+    'skin': 'Skin Thickness',
+    'insu': 'Insulin'
+}
+
+# Feature selector
+st.write("**Select a feature to view its distribution overlap**")
+st.caption("The less overlap between distributions, the better the feature separates diabetic from non-diabetic patients")
+
+selected_feature = st.selectbox(
+    "Choose feature",
+    ['plas', 'mass', 'age', 'pedi', 'preg', 'pres', 'skin', 'insu'],
+    format_func=lambda x: feature_names_full[x],
+    label_visibility="collapsed"
+)
+
+# Get stats for selected feature
+feature_data = df_variance[df_variance['feature'] == selected_feature].iloc[0]
+feature_name = feature_names_full[selected_feature]
+sep_score = feature_data['separation_score']
+pos_mean = feature_data['positive_mean']
+neg_mean = feature_data['negative_mean']
+pos_std = feature_data['positive_std']
+neg_std = feature_data['negative_std']
+
+# Display statistics
+stat_cols = st.columns(5)
+with stat_cols[0]:
+    st.metric("Separation Score", f"{sep_score:.3f}", help="Higher = better separation")
+with stat_cols[1]:
+    st.metric("Diabetic Mean", f"{pos_mean:.2f}")
+with stat_cols[2]:
+    st.metric("Non-Diabetic Mean", f"{neg_mean:.2f}")
+with stat_cols[3]:
+    st.metric("Mean Difference", f"{abs(pos_mean - neg_mean):.2f}")
+with stat_cols[4]:
+    st.metric("Std Dev Avg", f"{((pos_std + neg_std) / 2):.2f}")
+
+""
+
+# Create distribution plot for selected feature
+fig = go.Figure()
+
+# Non-diabetic histogram
+fig.add_trace(go.Histogram(
+    x=negative_data[selected_feature],
+    name='Non-Diabetic',
+    opacity=0.6,
+    marker_color='#4caf50',
+    histnorm='probability density',
+    nbinsx=30
+))
+
+# Diabetic histogram
+fig.add_trace(go.Histogram(
+    x=positive_data[selected_feature],
+    name='Diabetic',
+    opacity=0.6,
+    marker_color='#f44336',
+    histnorm='probability density',
+    nbinsx=30
+))
+
+# Add normal distribution curves
+x_range = np.linspace(
+    min(dataset[selected_feature].min(), neg_mean - 3*neg_std, pos_mean - 3*pos_std),
+    max(dataset[selected_feature].max(), neg_mean + 3*neg_std, pos_mean + 3*pos_std),
+    200
+)
+
+# Non-diabetic normal curve
+neg_curve = stats.norm.pdf(x_range, neg_mean, neg_std)
+fig.add_trace(go.Scatter(
+    x=x_range,
+    y=neg_curve,
+    name='Non-Diabetic (Normal)',
+    line=dict(color='darkgreen', width=3),
+    mode='lines'
+))
+
+# Diabetic normal curve
+pos_curve = stats.norm.pdf(x_range, pos_mean, pos_std)
+fig.add_trace(go.Scatter(
+    x=x_range,
+    y=pos_curve,
+    name='Diabetic (Normal)',
+    line=dict(color='darkred', width=3),
+    mode='lines'
+))
+
+fig.update_layout(
+    title=f"{feature_name} Distribution - Diabetic vs Non-Diabetic",
+    xaxis_title=feature_name,
+    yaxis_title="Density",
+    height=500,
+    barmode='overlay',
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+""
+""
+
+# Feature Correlations
+"""
+## :material/grid_on: Feature Correlations
+Understanding how features relate to each other and to diabetes
+"""
+
+st.write("**What are correlations?** Correlations measure how strongly features are related (range: -1 to +1)")
+st.caption("Positive correlation: both increase together | Negative correlation: one increases, other decreases | Zero: no relationship")
+
+# Prepare correlation data
+corr_data = dataset.copy()
+corr_data['Diabetes'] = (corr_data['class'] == 'tested_positive').astype(int)
+
+# Select features for correlation
+corr_features = ['preg', 'plas', 'pres', 'skin', 'insu', 'mass', 'pedi', 'age', 'Diabetes']
+correlation_matrix = corr_data[corr_features].corr()
+
+# Rename for display
+feature_display_names = ['Pregnancies', 'Glucose', 'Blood Pressure', 'Skin Thickness', 
+                         'Insulin', 'BMI', 'Pedigree', 'Age', 'Diabetes']
+
+# Create heatmap
+fig = px.imshow(
+    correlation_matrix,
+    labels=dict(x="Feature", y="Feature", color="Correlation"),
+    x=feature_display_names,
+    y=feature_display_names,
+    color_continuous_scale='RdBu_r',
+    aspect='auto',
+    text_auto='.2f',
+    zmin=-1,
+    zmax=1
+)
+
+fig.update_layout(
+    title="Feature Correlation Heatmap",
+    height=600,
+    width=800
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+""
+
+# Show correlations with diabetes
+st.write("**How Each Feature Correlates with Diabetes**")
+st.caption("Higher absolute values = stronger relationship with diabetes risk")
+
+diabetes_corr = correlation_matrix['Diabetes'].drop('Diabetes').sort_values(ascending=False)
+
+corr_display = pd.DataFrame({
+    'Feature': feature_display_names[:-1],  # Exclude 'Diabetes' itself
+    'Correlation': diabetes_corr.values,
+    'Strength': diabetes_corr.abs().values
+})
+
+# Create bar chart for correlations with diabetes
+fig = go.Figure()
+
+# Color bars based on positive/negative
+colors = ['#f44336' if x > 0 else '#2196f3' for x in corr_display['Correlation']]
+
+fig.add_trace(go.Bar(
+    x=corr_display['Correlation'],
+    y=corr_display['Feature'],
+    orientation='h',
+    marker=dict(
+        color=colors,
+        line=dict(color='black', width=0.5)
+    ),
+    text=corr_display['Correlation'].round(3),
+    textposition='outside',
+    hovertemplate='<b>%{y}</b><br>Correlation: %{x:.3f}<extra></extra>'
+))
+
+fig.update_layout(
+    title="Correlation with Diabetes Risk",
+    xaxis_title="Correlation Coefficient",
+    yaxis_title="",
+    height=450,
+    xaxis=dict(range=[-0.1, 0.55], zeroline=True, zerolinewidth=2, zerolinecolor='black'),
+    showlegend=False
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+
 
 ""
 ""
